@@ -6,13 +6,21 @@ Sort of an add-on to App::Prove::Elasticsearch so you can cross-reference test b
 Stores various fields, broken down *per file*:
 
 commit: relevant SHA
+
 branch: relevant branch
+
 time: relevant time commit got recorded in said branch
+
 message: commit message
+
 diff: diff of changes for a particular file
+
 diffstat: total LoC change (add abs of file add/sub)
+
 add: No. Additions
+
 rem: No. Removals
+
 file: file changed
 
 Means of operation is simple, enter your repository and run es-index-repository.
