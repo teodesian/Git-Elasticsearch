@@ -4,16 +4,120 @@ use strict;
 use warnings;
 
 use Git;
+use Search::Elasticsearch;
 use App::Prove::Elasticsearch::Utils;
 
 our $index = 'git';
 our $scale = 1000;
+our $e;
 
 our $idx;
 our $bulk_helper;
 
+sub check_index {
+    my ($e,$overwrite) = @_;
+
+    $e->indices->delete( index => $index ) if $overwrite;
+
+    if (!$e->indices->exists( index => $index )) {
+        $e->indices->create(
+            index => $index,
+            body  => {
+                index => {
+                    similarity         => {
+                        default => {
+                            type => "classic"
+                        }
+                    }
+                },
+                analysis => {
+                    analyzer => {
+                        default => {
+                            type      => "custom",
+                            tokenizer => "whitespace",
+                            filter =>
+                              [ 'lowercase', 'std_english_stop' ]
+                        }
+                    },
+                    filter => {
+                        std_english_stop => {
+                            type      => "stop",
+                            stopwords => "_english_"
+                        },
+                    }
+                },
+                mappings => {
+                    git => {
+                        properties => {
+                            id      => { type => "integer" },
+                            date    => {
+                                type   => "date",
+                                format => "EEEE MMMM dd HH:mm:ss yyyy"
+                            },
+                            author          => {
+                                type        => "text",
+                                analyzer    => "default",
+                                fielddata   => "true",
+                                term_vector => "yes",
+                                similarity  => "classic",
+                                fields      => {
+                                    keyword => { type => "keyword" }
+                                }
+                            },
+                            email             => {
+                                type        => "text",
+                                analyzer    => "default",
+                                fielddata   => "true",
+                                term_vector => "yes",
+                                similarity  => "classic",
+                                fields      => {
+                                    keyword => { type => "keyword" }
+                                }
+                            },
+                            sha            => {
+                                type        => "text",
+                                analyzer    => "default",
+                                fielddata   => "true",
+                                term_vector => "yes",
+                                similarity  => "classic",
+                                fields      => {
+                                    keyword => { type => "keyword" }
+                                }
+                            },
+                            name    => {
+                                type        => "text",
+                                analyzer    => "default",
+                                fielddata   => "true",
+                                term_vector => "yes",
+                                similarity  => "classic",
+                                fields      => {
+                                    keyword => { type => "keyword" }
+                                }
+                            },
+                            patch           => {
+                                type        => "text",
+                                analyzer    => "default",
+                                fielddata   => "true",
+                                term_vector => "yes",
+                                similarity  => "classic",
+                                fields      => {
+                                    keyword => { type => "keyword" }
+                                }
+                            },
+                            add => { type => "integer" },
+                            del => { type => "integer" },
+                        }
+                    }
+                }
+            }
+        );
+        return 1;
+    }
+    return 0;
+}
+
 sub index_log {
-    my ($stop_at_sha) = @_;
+    my ($stop_at_sha,$overwrite) = @_;
     $stop_at_sha //= '';
 
     my $conf = App::Prove::Elasticsearch::Utils::process_configuration();
@@ -24,6 +128,7 @@ sub index_log {
     $e //= Search::Elasticsearch->new(
         nodes           => $serveraddress,
     );
+	die "Could not create index $index" unless check_index($e,$overwrite);
 
     #Batch in blobs to not OOM
     my @command = (qw{log --all -M --find-copies-harder --numstat}, "-$scale");
@@ -44,7 +149,7 @@ sub index_log {
 				push(@records,$file);
             }
         }
-		bulk_index($es,@records);
+		bulk_index($e,@records);
 
         last if $stop_at_sha && $parsed{$stop_at_sha};
         $cnt++;
@@ -73,7 +178,7 @@ sub parse_log {
             next;
         }
 
-        if (my ($date) = $line =~ m/^Date:\s*(.*)$/ ) {
+        if (my ($date) = $line =~ m/^Date:\s*(.*) \+/ ) {
             $parsed{$sha}{date} = $date;
             next;
         }
