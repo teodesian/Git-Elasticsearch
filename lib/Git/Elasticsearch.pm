@@ -26,7 +26,7 @@ sub check_index {
                 index => {
                     similarity         => {
                         default => {
-                            type => "classic"
+                            type => "BM25"
                         }
                     }
                 },
@@ -59,7 +59,7 @@ sub check_index {
                                 analyzer    => "default",
                                 fielddata   => "true",
                                 term_vector => "yes",
-                                similarity  => "classic",
+                                similarity  => "BM25",
                                 fields      => {
                                     keyword => { type => "keyword" }
                                 }
@@ -69,7 +69,7 @@ sub check_index {
                                 analyzer    => "default",
                                 fielddata   => "true",
                                 term_vector => "yes",
-                                similarity  => "classic",
+                                similarity  => "BM25",
                                 fields      => {
                                     keyword => { type => "keyword" }
                                 }
@@ -79,7 +79,7 @@ sub check_index {
                                 analyzer    => "default",
                                 fielddata   => "true",
                                 term_vector => "yes",
-                                similarity  => "classic",
+                                similarity  => "BM25",
                                 fields      => {
                                     keyword => { type => "keyword" }
                                 }
@@ -89,7 +89,7 @@ sub check_index {
                                 analyzer    => "default",
                                 fielddata   => "true",
                                 term_vector => "yes",
-                                similarity  => "classic",
+                                similarity  => "BM25",
                                 fields      => {
                                     keyword => { type => "keyword" }
                                 }
@@ -99,7 +99,7 @@ sub check_index {
                                 analyzer    => "default",
                                 fielddata   => "true",
                                 term_vector => "yes",
-                                similarity  => "classic",
+                                similarity  => "BM25",
                                 fields      => {
                                     keyword => { type => "keyword" }
                                 }
@@ -113,22 +113,14 @@ sub check_index {
         );
         return 1;
     }
-    return 0;
+    return 1;
 }
 
 sub index_log {
     my ($stop_at_sha,$overwrite) = @_;
     $stop_at_sha //= '';
 
-    my $conf = App::Prove::Elasticsearch::Utils::process_configuration();
-    my $port = $conf->{'server.port'} ? ':'.$conf->{'server.port'} : '';
-    die "server must be specified" unless $conf->{'server.host'};
-    die("port must be specified") unless $port;
-    my $serveraddress = "$conf->{'server.host'}$port";
-    $e //= Search::Elasticsearch->new(
-        nodes           => $serveraddress,
-    );
-	die "Could not create index $index" unless check_index($e,$overwrite);
+	_get_handle($overwrite);
 
     #Batch in blobs to not OOM
     my @command = (qw{log --all -M --find-copies-harder --numstat}, "-$scale");
@@ -141,7 +133,6 @@ sub index_log {
 		my @records;
         foreach my $sha ( keys(%parsed) ) {
             foreach my $file ( @{$parsed{$sha}{files}} ) {
-                print "Index $file->{name} at $sha\n";
                 $file->{sha}    = $sha;
                 $file->{author} = $parsed{$sha}{author};
                 $file->{email}  = $parsed{$sha}{email};
@@ -149,13 +140,55 @@ sub index_log {
 				push(@records,$file);
             }
         }
-		bulk_index($e,@records);
 
         last if $stop_at_sha && $parsed{$stop_at_sha};
+
+		bulk_index($e,@records);
+
         $cnt++;
         @skip = ('--skip',$cnt*$scale);
     }
+	print "Nothing newer than $stop_at_sha\n" if !$cnt && $stop_at_sha;
+
     return 1;
+}
+
+sub _get_handle {
+	my $overwrite = shift;
+    my $conf = App::Prove::Elasticsearch::Utils::process_configuration();
+    my $port = $conf->{'server.port'} ? ':'.$conf->{'server.port'} : '';
+    die "server must be specified" unless $conf->{'server.host'};
+    die("port must be specified") unless $port;
+    my $serveraddress = "$conf->{'server.host'}$port";
+    $e //= Search::Elasticsearch->new(
+        nodes           => $serveraddress,
+    );
+	die "Could not create index $index" unless check_index($e,$overwrite);
+	return $e;
+}
+
+sub get_last_sha {
+	_get_handle();
+
+    my $res = $e->search(
+        index => $index,
+        body  => {
+            query => {
+                match_all => { }
+            },
+            sort => {
+                date => {
+                  order => "desc"
+                }
+            },
+            size => 1
+        }
+    );
+
+    my $hits = $res->{hits}->{hits};
+    return 0 unless scalar(@$hits);
+
+    return $hits->[0]->{_source}->{sha};
 }
 
 sub parse_log {
@@ -204,6 +237,10 @@ sub bulk_index {
         index    => $index,
         type     => $index,
     );
+
+	my $start = $results[0]{sha};
+	my $end   = $results[-1]{sha};
+	print "Indexing from $start to $end...\n";
 
     $idx //= App::Prove::Elasticsearch::Utils::get_last_index($e,$index);
 

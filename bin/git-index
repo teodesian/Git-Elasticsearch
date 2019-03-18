@@ -1,0 +1,48 @@
+#!/usr/bin/perl
+
+package bin::git::index;
+
+use strict;
+use warnings;
+
+use Getopt::Long;
+use Git::Elasticsearch;
+
+=head1 git-index
+
+Index the current git branch into Elasticsearch.
+
+Only indexes SHAs since the last time you ran it.
+
+=head2 OPTIONS
+
+=over 
+
+=item B<--reindex> wipe the data and try again.  Useful for when force pushes happen, but this means things will take a long time for large repositories.
+
+=item B<--sha> Start from the provided SHA rather than since the newest SHA found in the index.
+
+=back
+
+=cut
+
+exit main(@ARGV) unless caller();
+
+sub main {
+    my (@args) = @_;
+
+    my ($reingest, $sha);
+
+    Getopt::Long::GetOptionsFromArray(\@args,
+        'reindex' => \$reingest,
+        'sha=s'   => \$sha,
+    );
+
+    $sha //= Git::Elasticsearch::get_last_sha() unless $reingest;
+
+    my $sha_nice = $sha ? $sha : 'root';
+    print "Indexing commits newer than $sha_nice...\n";
+
+    return 0 if Git::Elasticsearch::index_log($sha,$reingest);
+    return 1;
+}
