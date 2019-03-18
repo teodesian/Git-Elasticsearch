@@ -23,11 +23,15 @@ rem: No. Removals
 
 file: file changed
 
-Means of operation is simple, enter your repository and run es-index-repository.
+Supposing this tool is installed into your PATH, operation is simple.
 
-Default operation is to only operate on the current branch, but a branch may be provided with (--branch), which may be passed multiple times.
-Remote-only branches are also accepted, along with arbitrary SHAs corresponding to detached HEADs.
+`git index`
 
-The tool will only index SHAs it has not yet seen, so it's safe to use the provided git post recieve hook.
+Default operation is to only operate on the current branch.
+In the future we will support branches, and name the index after the repo and branch name.
 
-Said hook will read ~/elastigit.conf and update ES for the configured branches on the configured remote.
+The tool will only index SHAs it has not yet seen, so it's safe to symlink this as a git post recieve hook.
+
+Said hook will read ~/elastest.conf and update ES for the configured branches on the configured remote.
+
+TODO: make this tool independent of App::Prove::Elasticsearch.
