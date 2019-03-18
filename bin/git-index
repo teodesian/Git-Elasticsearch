@@ -5,6 +5,7 @@ package bin::git::index;
 use strict;
 use warnings;
 
+use Pod::Usage;
 use Getopt::Long;
 use Git::Elasticsearch;
 
@@ -14,13 +15,17 @@ Index the current git branch into Elasticsearch.
 
 Only indexes SHAs since the last time you ran it.
 
-=head2 OPTIONS
+=head2 USAGE
+
+    git index [--reindex] [--sha 0xdeadbeef]
 
 =over 
 
 =item B<--reindex> wipe the data and try again.  Useful for when force pushes happen, but this means things will take a long time for large repositories.
 
 =item B<--sha> Start from the provided SHA rather than since the newest SHA found in the index.
+
+=item B<--help> Print this message.
 
 =back
 
@@ -31,12 +36,15 @@ exit main(@ARGV) unless caller();
 sub main {
     my (@args) = @_;
 
-    my ($reingest, $sha);
+    my ($reingest, $sha, $help);
 
     Getopt::Long::GetOptionsFromArray(\@args,
         'reindex' => \$reingest,
         'sha=s'   => \$sha,
+        'help'    => \$help,
     );
+
+    pod2usage( -exitval => 0, -verbose => 2 ) if $help;
 
     $sha //= Git::Elasticsearch::get_last_sha() unless $reingest;
 
