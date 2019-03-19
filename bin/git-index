@@ -13,6 +13,9 @@ use Git::Elasticsearch;
 
 Index the current git branch into Elasticsearch.
 
+Creates an index named as the basename of the 'origin' remote's url, or failing that, the TLD of your repository.
+Index name will be lowercase.  If your repo name is not a valid name for an ES index, you can pass --index to use a custom name.
+
 Only indexes SHAs since the last time you ran it.
 
 =head2 USAGE
@@ -25,6 +28,8 @@ Only indexes SHAs since the last time you ran it.
 
 =item B<--sha> Start from the provided SHA rather than since the newest SHA found in the index.
 
+=item B<--index> Use a custom index name.
+
 =item B<--help> Print this message.
 
 =back
@@ -36,15 +41,18 @@ exit main(@ARGV) unless caller();
 sub main {
     my (@args) = @_;
 
-    my ($reingest, $sha, $help);
+    my ($reingest, $sha, $help, $index);
 
     Getopt::Long::GetOptionsFromArray(\@args,
         'reindex' => \$reingest,
         'sha=s'   => \$sha,
+        'index=s' => \$index,
         'help'    => \$help,
     );
 
     pod2usage( -exitval => 0, -verbose => 2 ) if $help;
+
+    $Git::Elasticsearch::index = $index if $index;
 
     $sha //= Git::Elasticsearch::get_last_sha() unless $reingest;
 

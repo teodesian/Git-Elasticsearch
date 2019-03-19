@@ -4,10 +4,12 @@ use strict;
 use warnings;
 
 use Git;
+use File::Basename;
+use Capture::Tiny qw{capture_stderr};
 use Search::Elasticsearch;
 use App::Prove::Elasticsearch::Utils;
 
-our $index = 'git';
+our $index;
 our $scale = 1000;
 our $e;
 
@@ -47,7 +49,7 @@ sub check_index {
                     }
                 },
                 mappings => {
-                    git => {
+                    "$index" => {
                         properties => {
                             id      => { type => "integer" },
                             date    => {
@@ -173,6 +175,9 @@ sub _get_handle {
     $e //= Search::Elasticsearch->new(
         nodes           => $serveraddress,
     );
+
+    $index ||= _get_index();
+
 	die "Could not create index $index" unless check_index($e,$overwrite);
 	return $e;
 }
@@ -260,6 +265,15 @@ sub bulk_index {
     $bulk_helper->index(map { $idx++; { id => $idx, source => $_ } } @results);
     $bulk_helper->flush();
 	return 1;
+}
+
+sub _get_index {
+    my $remotename = eval { capture_stderr { Git::command(qw{remote get-url origin}) } };
+    chomp $remotename if $remotename;
+    $remotename = Git::command(qw{rev-parse --show-toplevel}) unless $remotename;
+    $remotename = basename($remotename);
+    $remotename =~ s/\.git$//g;
+    return lc($remotename);
 }
 
 1;
