@@ -104,6 +104,16 @@ sub check_index {
                                     keyword => { type => "keyword" }
                                 }
                             },
+                            branch          => {
+                                type        => "text",
+                                analyzer    => "default",
+                                fielddata   => "true",
+                                term_vector => "yes",
+                                similarity  => "BM25",
+                                fields      => {
+                                    keyword => { type => "keyword" }
+                                }
+                            },
                             add => { type => "integer" },
                             del => { type => "integer" },
                         }
@@ -201,7 +211,10 @@ sub parse_log {
             $sha = $sha_parsed;
             last if $last_sha && $last_sha eq $stop_at_sha;
             $last_sha = $sha;
-            $parsed{$sha} = {};
+            my @branches = split("\n",Git::command((qw{branch --contains},$sha)));
+            $parsed{$sha} = {
+                branch => \@branches,
+            };
             next;
         }
 
@@ -222,7 +235,7 @@ sub parse_log {
                 name => $file,
                 add  => $add,
                 del  => $del,
-                patch => join("\n", Git::command((qw{format-patch -1 --stdout},$sha))),
+                patch => join("\n", Git::command((qw{format-patch -1 --stdout},$sha,$file))),
             });
             next;
         }
