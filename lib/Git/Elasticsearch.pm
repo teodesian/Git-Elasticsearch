@@ -129,21 +129,27 @@ sub check_index {
 }
 
 sub index_log {
-    my ($stop_at_sha,$overwrite) = @_;
+    my ($stop_at_sha,$overwrite, $start_at_sha) = @_;
     $stop_at_sha //= '';
 
 	_get_handle($overwrite);
 
     #Batch in blobs to not OOM
     my @command = (qw{log --all -M --find-copies-harder --numstat}, "-$scale");
-    my ($cnt,@skip);
+    my ($cnt,$found_start,@skip);
 
     while( my @log = Git::command((@command,@skip)) ) {
         last unless @log;
         my %parsed = parse_log($stop_at_sha,@log);
 
 		my @records;
-        foreach my $sha ( keys(%parsed) ) {
+        foreach my $sha ( sort { $parsed{$a}->{order} <=> $parsed{$b}->{order} } keys(%parsed) ) {
+            print "$sha\n";
+            if (!$found_start && $start_at_sha) {
+                next if $sha ne $start_at_sha;
+                $found_start = 1;
+            }
+
             foreach my $file ( @{$parsed{$sha}{files}} ) {
                 $file->{sha}    = $sha;
                 $file->{author} = $parsed{$sha}{author};
@@ -151,16 +157,17 @@ sub index_log {
                 $file->{date}   = $parsed{$sha}{date};
 				push(@records,$file);
             }
+
+            #last if $stop_at_sha && $stop_at_sha eq $sha;
         }
 
-        last if $stop_at_sha && $parsed{$stop_at_sha};
-
 		bulk_index($e,@records);
+
+        last if $stop_at_sha && $parsed{$stop_at_sha};
 
         $cnt++;
         @skip = ('--skip',$cnt*$scale);
     }
-	print "Nothing newer than $stop_at_sha\n" if !$cnt && $stop_at_sha;
 
     return 1;
 }
@@ -211,6 +218,7 @@ sub parse_log {
 
     my %parsed;
     my ($sha,$last_sha);
+    my $num=0;
     foreach my $line (@log) {
         if ( my ($sha_parsed) = $line =~ m/^commit ([A-Fa-f0-9]*)$/ ) {
             $sha = $sha_parsed;
@@ -219,7 +227,9 @@ sub parse_log {
             my @branches = split("\n",Git::command((qw{branch --contains},$sha)));
             $parsed{$sha} = {
                 branch => \@branches,
+                order => $num,
             };
+            $num++;
             next;
         }
 
