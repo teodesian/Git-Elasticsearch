@@ -16,19 +16,26 @@ Index the current git branch into Elasticsearch.
 Creates an index named as the basename of the 'origin' remote's url, or failing that, the TLD of your repository.
 Index name will be lowercase.  If your repo name is not a valid name for an ES index, you can pass --index to use a custom name.
 
-Only indexes SHAs since the last time you ran it.
+Only indexes SHAs since the last time you ran it, unless you specify otherwise.
 
 =head2 USAGE
 
-    git index [--reindex] [--sha 0xdeadbeef]
+    git index [--reindex] [--start deadbeef] [--stop cafebabe] [--index myindex]
 
 =over 
 
 =item B<--reindex> wipe the data and try again.  Useful for when force pushes happen, but this means things will take a long time for large repositories.
 
-=item B<--sha> Start from the provided SHA rather than since the newest SHA found in the index.
+=item B<--stop SHA> Stop at the provided SHA rather than since the newest SHA found in the index.
 
-=item B<--index> Use a custom index name.
+This is *non-inclusive* save in the case your start is your stop.
+
+=item B<--start SHA> Start indexing at SHA rather than the latest HEAD.
+
+This is useful for grabbing commits which time-warp ahead of commits proceeding them (which as such may be missed, and need manual ingest).
+If you make a habit of this, consider stashing your "latest" sha somewhere and feed in the stop and start appropriately in your cron.
+
+=item B<--index NAME> Use a custom index name.
 
 =item B<--help> Print this message.
 
@@ -41,11 +48,12 @@ exit main(@ARGV) unless caller();
 sub main {
     my (@args) = @_;
 
-    my ($reingest, $sha, $help, $index);
+    my ($reingest, $stop_sha, $help, $index, $start_sha);
 
     Getopt::Long::GetOptionsFromArray(\@args,
         'reindex' => \$reingest,
-        'sha=s'   => \$sha,
+        'stop=s'  => \$stop_sha,
+        'start=s' => \$start_sha,
         'index=s' => \$index,
         'help'    => \$help,
     );
@@ -54,11 +62,12 @@ sub main {
 
     $Git::Elasticsearch::index = $index if $index;
 
-    $sha //= Git::Elasticsearch::get_last_sha() unless $reingest;
+    $stop_sha //= Git::Elasticsearch::get_last_sha() unless $reingest;
 
-    my $sha_nice = $sha ? $sha : 'root';
+    my $sha_nice = $stop_sha ? $stop_sha : 'root';
     print "Indexing commits newer than $sha_nice...\n";
+    print "Stopping after $start_sha...\n" if $start_sha;
 
-    return 0 if Git::Elasticsearch::index_log($sha,$reingest);
+    return 0 if Git::Elasticsearch::index_log($stop_sha,$reingest, $start_sha);
     return 1;
 }
