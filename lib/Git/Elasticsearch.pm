@@ -130,8 +130,9 @@ sub check_index {
                                     keyword => { type => "keyword" }
                                 }
                             },
-                            add => { type => "integer" },
-                            del => { type => "integer" },
+                            add     => { type => "integer" },
+                            del     => { type => "integer" },
+                            changed => { type => "integer" },
                         }
                     }
                 }
@@ -160,7 +161,7 @@ sub index_log {
 	_get_handle($overwrite);
 
     #Batch in blobs to not OOM
-    my @command = (qw{log --all -M --find-copies-harder --numstat}, "-$scale");
+    my @command = (qw{log -M --find-copies-harder --numstat}, "-$scale");
     my ($cnt,$found_start,@skip);
 
     while( my @log = Git::command((@command,@skip)) ) {
@@ -291,6 +292,7 @@ sub parse_log {
                 name => $file,
                 add  => $add,
                 del  => $del,
+                changed => ( $add + $del ),
                 patch => join("\n", Git::command((qw{format-patch -1 --stdout},$sha,$file))),
             });
             next;

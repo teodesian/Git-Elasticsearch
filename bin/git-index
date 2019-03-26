@@ -11,7 +11,7 @@ use Git::Elasticsearch;
 
 =head1 git-index
 
-Index the current git branch into Elasticsearch.
+Index the I<current git branch> into Elasticsearch.
 
 Creates an index named as the basename of the 'origin' remote's url, or failing that, the TLD of your repository.
 Index name will be lowercase.  If your repo name is not a valid name for an ES index, you can pass --index to use a custom name.
