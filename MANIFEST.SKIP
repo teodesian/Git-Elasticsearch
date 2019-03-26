@@ -1,0 +1,11 @@
+cover_db/*
+MANIFEST.SKIP
+dist/*
+dist.ini
+weaver.ini
+README.md
+.git/*
+.gitignore
+tidyall.ini
+.build/*
+Git-Elasticsearch-*/
