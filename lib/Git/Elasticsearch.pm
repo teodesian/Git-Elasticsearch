@@ -1,3 +1,6 @@
+# PODNAME: Git::Elasticsearch
+# ABSTRACT: Utility functions for indexing git repositories into elasticsearch
+
 package Git::Elasticsearch;
 
 use strict;
@@ -15,6 +18,17 @@ our $e;
 
 our $idx;
 our $bulk_helper;
+
+=head1 FUNCTIONS
+
+=head2 check_index(Search::Elasticsearch $es,BOOL $overwrite)
+
+Ensure that the needed index (defined as $index on this package) is set up correctly on the ES instance.
+If overwrite is passed, any existing index with the name will be deleted first.
+
+Returns BOOL, dies on failure
+
+=cut
 
 sub check_index {
     my ($e,$overwrite) = @_;
@@ -128,6 +142,17 @@ sub check_index {
     return 1;
 }
 
+=head2 index_log(STRING $stop_at_sha, BOOL $overwrite, STRING $start_at_sha)
+
+Gather the git log information from $start_at_sha to $stop_at_sha.
+Overwrite the existing index if $overwrite is passed.
+
+$start_at_sha is HEAD by default, and $stop_at_sha is the newest (by date) SHA that can be found indexed, or the root commit.
+
+Returns BOOL, dies on failure.
+
+=cut
+
 sub index_log {
     my ($stop_at_sha,$overwrite, $start_at_sha) = @_;
     $stop_at_sha //= '';
@@ -189,6 +214,14 @@ sub _get_handle {
 	return $e;
 }
 
+=head2 get_last_sha()
+
+Query elasticsearch to find out what the latest available SHA is.
+
+Returns STRING
+
+=cut
+
 sub get_last_sha {
 	_get_handle();
 
@@ -212,6 +245,14 @@ sub get_last_sha {
 
     return $hits->[0]->{_source}->{sha};
 }
+
+=head2 parse_log(STRING $stop_at_sha,ARRAY @lines)
+
+Read the git log and pick out the good stuff we want in ES
+
+returns HASH
+
+=cut
 
 sub parse_log {
     my ($stop_at_sha,@log) = @_;
@@ -258,6 +299,14 @@ sub parse_log {
     }
     return %parsed;
 }
+
+=head2 bulk_index(ARRAY @records)
+
+Index an array of results suitable for ingestion into ES
+
+returns BOOL, dies on failure
+
+=cut
 
 sub bulk_index {
     my ($es,@results) = @_;
