@@ -10,7 +10,8 @@ use Git;
 use File::Basename;
 use Capture::Tiny qw{capture_stderr};
 use Search::Elasticsearch;
-use App::Prove::Elasticsearch::Utils;
+use File::HomeDir;
+use Config::Simple;
 
 our $index;
 our $scale = 1000;
@@ -200,7 +201,7 @@ sub index_log {
 
 sub _get_handle {
 	my $overwrite = shift;
-    my $conf = App::Prove::Elasticsearch::Utils::process_configuration();
+    my $conf = process_configuration();
     my $port = $conf->{'server.port'} ? ':'.$conf->{'server.port'} : '';
     die "server must be specified" unless $conf->{'server.host'};
     die("port must be specified") unless $port;
@@ -321,7 +322,7 @@ sub bulk_index {
 	my $end   = $results[-1]{sha};
 	print "Indexing from $start to $end...\n";
 
-    $idx //= App::Prove::Elasticsearch::Utils::get_last_index($e,$index);
+    $idx //= get_last_index($e,$index);
 
     $bulk_helper->index(map { $idx++; { id => $idx, source => $_ } } @results);
     $bulk_helper->flush();
@@ -336,5 +337,81 @@ sub _get_index {
     $remotename =~ s/\.git$//g;
     return lc($remotename);
 }
+
+# Shamelessly ripped off from my other module - GSB
+
+=head2 get_last_index
+
+Ask ES for the last index it has on hand, so we can then add some new records.
+
+Arguments are ES handle and index name.
+
+=cut
+
+sub get_last_index {
+    my ($e,$index) = @_;
+
+    my $res = $e->search(
+        index => $index,
+        body  => {
+            query => {
+                match_all => { }
+            },
+            sort => {
+                id => {
+                  order => "desc"
+                }
+            },
+            size => 1
+        }
+    );
+
+    my $hits = $res->{hits}->{hits};
+    return 0 unless scalar(@$hits);
+
+    return $res->{hits}->{total};
+}
+
+=head2 process_configuration
+
+Read the configuration & any CLI args (key=value,key=value...), and set their values in ENV.
+
+=cut
+
+sub process_configuration {
+    my $args = shift;
+    my $conf = {};
+
+    my $homedir = File::HomeDir::my_home() || '.';
+    if (-e $homedir) {
+        unless( Config::Simple->import_from("$homedir/elastest.conf", $conf) ) {
+            warn Config::Simple->error() if -e "$homedir/elastest.conf";
+        }
+    }
+
+    my @kvp = ();
+    my ( $key, $value );
+    foreach my $arg (@$args) {
+        @kvp = split( /=/, $arg );
+        if ( scalar(@kvp) < 2 ) {
+            print
+              "Unrecognized Argument '$arg', ignoring\n";
+            next;
+        }
+        $key            = shift @kvp;
+        $value          = join( '', @kvp );
+        $conf->{$key} = $value;
+    }
+
+    #Set ENV for use by harness
+    foreach my $key (keys(%$conf)) {
+        my $km = uc($key);
+        $km =~ s/\./_/g;
+        $ENV{$km} = $conf->{$key};
+    }
+
+    return $conf;
+}
+
 
 1;
