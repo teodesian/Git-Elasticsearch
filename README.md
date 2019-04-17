@@ -33,5 +33,3 @@ In the future we will support branches, and name the index after the repo and br
 The tool will only index SHAs it has not yet seen, so it's safe to symlink this as a git post recieve hook.
 
 Said hook will read ~/elastest.conf and update ES for the configured branches on the configured remote.
-
-TODO: make this tool independent of App::Prove::Elasticsearch.
