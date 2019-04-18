@@ -131,6 +131,16 @@ sub check_index {
                                     keyword => { type => "keyword" }
                                 }
                             },
+                            action          => {
+                                type        => "text",
+                                analyzer    => "default",
+                                fielddata   => "true",
+                                term_vector => "yes",
+                                similarity  => "BM25",
+                                fields      => {
+                                    keyword => { type => "keyword" }
+                                }
+                            },
                             add     => { type => "integer" },
                             del     => { type => "integer" },
                             changed => { type => "integer" },
@@ -162,7 +172,7 @@ sub index_log {
 	_get_handle($overwrite);
 
     #Batch in blobs to not OOM
-    my @command = (qw{log -M --find-copies-harder --numstat}, "-$scale");
+    my @command = (qw{log -M --find-copies-harder --numstat --summary}, "-$scale");
     my ($cnt,$found_start,@skip);
 
     while( my @log = Git::command((@command,@skip)) ) {
@@ -289,17 +299,36 @@ sub parse_log {
 
         if ( my ($add,$del,$file) = $line =~ m/^\s*(\d+)\s*(\d+)\s*(.*)/) {
             $parsed{$sha}{files} //= [];
+            my ($renamed) = $file =~ m/ => (\S*)/;
+            $file = $renamed if $renamed;
+            my $file_arg = $renamed ? '--summary' : $file;
             push(@{$parsed{$sha}{files}}, {
-                name => $file,
-                add  => $add,
-                del  => $del,
+                name    => $file,
+                add     => $add,
+                del     => $del,
                 changed => ( $add + $del ),
-                patch => join("\n", Git::command((qw{format-patch -1 --stdout},$sha,$file))),
+                patch   => join("\n", Git::command((qw{format-patch -N1 --stdout},$sha, $file_arg))),
             });
             next;
         }
 
+        #These will *always* come after done parsing the files list
+        if (my ($action) = $line =~ m/^\s(rename|create|mode)/ ) {
+            my ($orig) = $line =~ m/=> (\S*)/;
+            my $file = $orig;
+            ($file) = $line =~ m/(\S*)$/ if $action ne 'rename';
+
+            foreach my $element (@{$parsed{$sha}{files}}) {
+                if ($element->{name} eq $file) {
+                    $element->{action} = $action
+                }
+            }
+            next;
+        }
+
+
     }
+
     return %parsed;
 }
 
