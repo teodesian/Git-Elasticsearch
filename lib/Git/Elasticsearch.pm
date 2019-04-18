@@ -181,7 +181,6 @@ sub index_log {
 
 		my @records;
         foreach my $sha ( sort { $parsed{$a}->{order} <=> $parsed{$b}->{order} } keys(%parsed) ) {
-            print "$sha\n";
             if (!$found_start && $start_at_sha) {
                 next if $sha ne $start_at_sha;
                 $found_start = 1;
